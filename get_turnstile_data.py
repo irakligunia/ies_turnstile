@@ -1,5 +1,4 @@
-skfagkasmgasmgakmsg
- # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import io
 from ctypes import *
 
