@@ -1,1 +1,1 @@
-wine /home/sysop/.wine/drive_c/Python27/python.exe /home/sysop/projects/turnstile/get_turnstile_data.py
+wine /home/irakli/.wine/drive_c/Python27/python.exe /home/irakli/projects/ies_turnstile/ies_get_turnstile_data.py
