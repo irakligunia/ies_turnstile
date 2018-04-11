@@ -1,21 +1,46 @@
 # -*- coding: utf-8 -*-
+
+# 1. readme -ში ჩავწეროთ რომ turnstile_records ცხრილში სადაც გადაგვაქვს ტურნიკეტის
+#    მონაცემები. უნდა არსებობდეს UNIQUE ინდექსი:
+#	 ALTER TABLE  `ies_inventari`.`turnstile_records` 
+#	 ADD UNIQUE  `unique_row` (  `date_time` ,  `card_number` ,  `in_out_state` )
+
 import os
 import MySQLdb
 import io
 from ctypes import *
+from datetime import datetime
 
 turnstile_ip = "10.0.0.245"
-mysql_ip = "10.0.0.2379"
+mysql_ip = "10.0.0.237"
 mysql_user = "turnstile"
 mysql_pass = "turnstile"
 mysql_db = "ies_inventari"
 turnstile_conn_params = "protocol=TCP,ipaddress=" + turnstile_ip + ",port=4370,timeout=4000,passwd="
+# log ფაილის სახელი
+log_filename = "log"
+# სკრიპტი ბეჭდავდეს თუ არა ტერმინალში
+printing = False
+# სკრიპტი წერდეს თუ არა log ფაილში
+write_in_log = True
 
 # სკრიპტის მისამართი
 script_path = os.path.dirname(os.path.realpath(__file__))
+log_file_path = script_path + "/" + log_filename
 # შევცვალოთ სამუშაო დირექტორია იმ მისამართზე სადაც გვაქვს ies_get_turnstile_data.py
 os.chdir(script_path)
 commpro = windll.LoadLibrary(script_path + "/plcommpro.dll")
+
+# ფუნქცია ბეჭდავს ტერმინალში და წერს ლოგ ფაილში მიწოდებულ message ტექსტს
+def print_and_log(message):
+	current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+	if printing is True:
+		print ("[" + current_time + "] " + message)
+	if write_in_log is True:
+		log_file = open(log_file_path, "a")
+		log_file.write("[" + current_time + "] " + message + "\n")
+		log_file.close()
+
 
 try:
 	# Mysql - თან დაკავშირება
@@ -80,13 +105,40 @@ commpro.Disconnect(conn_hendler)
 conn_hendler = 0
 
 lines = query_buf.value.split('\r\n')
+insert_columns = "INSERT IGNORE INTO  turnstile_records (date_time ,card_number, in_out_state) VALUES"
+insert_queries = ""
+insert_values = ""
+insert_values_caunt = 0
 del lines[0]
 del lines[-1]
 for line in lines:
-	# print line
-	words = line.split(',')
+	values = line.split(',')
+	card_number = values[0]
+	verified = values[2]
+	event_type = values[4]
+	in_out_state = values[5]
+	time = turnstile_time_to_mysql_time(values[6])
 
-	# print words
-	# print line
+	if (verified == '4' and event_type == '0'):
+		insert_values += "('%s', '%s', '%s')," % (time, card_number, in_out_state)
+		insert_values_caunt += 1
+	else:
+		print_and_log("wrong value(s): %s %s %s %s %s" % (card_number, verified, event_type, in_out_state, time))
 
+	if insert_values_caunt >= 500:
+		try:
+			cursor.execute(insert_columns + insert_values[:-1])
+			db.commit()
+		except:
+			print_and_log("Error during inserting turnstile data in mysql(%s)" % mysql_ip)
+		insert_values = ""
+		insert_values_caunt = 0
+
+
+if insert_values_caunt > 0:
+	try:
+		cursor.execute(insert_columns + insert_values[:-1])
+		db.commit()
+	except:
+		print_and_log("Error during inserting turnstile data in mysql(%s)" % mysql_ip)
 print "done"
